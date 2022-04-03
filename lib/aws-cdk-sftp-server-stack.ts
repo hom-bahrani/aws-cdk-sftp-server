@@ -29,7 +29,10 @@ import {
   PolicyStatement,
   ServicePrincipal
 } from 'aws-cdk-lib/aws-iam';
-import { CfnServer } from 'aws-cdk-lib/aws-transfer';
+import {
+  CfnServer,
+  CfnUser
+} from 'aws-cdk-lib/aws-transfer';
 import {
   Bucket,
   BlockPublicAccess
@@ -225,6 +228,68 @@ export class AwsCdkSftpServerStack extends Stack {
         },
       });
     }
+
+    const userRole = new Role(this, 'userRole', {
+      assumedBy: new ServicePrincipal('transfer.amazonaws.com'),
+      description: 'SFTP standard user role',
+    });
+
+    userRole.addToPrincipalPolicy(new PolicyStatement({
+      sid: 'List',
+      actions: ['s3:ListBucket'],
+      resources: ['*'],
+    }));
+
+    userRole.addToPrincipalPolicy(new PolicyStatement({
+      sid: 'UserObjects',
+      actions: [
+        's3:PutObject',
+        's3:GetObject',
+        's3:GetObjectVersion',
+      ],
+      resources: [`${sftpBucket.bucketArn}/*`],
+    }));
+
+    users.forEach((user: { userName: string; publicKey: string; }, i) => {
+      const { userName, publicKey } = user;
+      new CfnUser(this, `user${i + 1}`, {
+        role: userRole.roleArn,
+        serverId,
+        userName,
+        homeDirectory: `/${sftpBucket.bucketName}/home/${userName}`,
+        sshPublicKeys: [publicKey],
+        policy: '{ \n\
+            "Version": "2012-10-17", \n\
+                    "Statement": [ \n\
+                        { \n\
+                            "Sid": "AllowListingOfUserFolder", \n\
+                            "Effect": "Allow", \n\
+                            "Action": "s3:ListBucket", \n\
+                            "Resource": "arn:aws:s3:::${transfer:HomeBucket}", \n\
+                            "Condition": { \n\
+                                "StringLike": { \n\
+                                    "s3:prefix": [ \n\
+                                        "home/${transfer:UserName}/*", \n\
+                                        "home/${transfer:UserName}" \n\
+                                    ] \n\
+                                } \n\
+                            } \n\
+                        }, \n\
+                        { \n\
+                            "Sid": "HomeDirObjectAccess", \n\
+                            "Effect": "Allow", \n\
+                            "Action": [ \n\
+                                "s3:PutObject", \n\
+                                "s3:GetObject", \n\
+                                "s3:GetObjectVersion" \n\
+                            ], \
+                            "Resource": "arn:aws:s3:::${transfer:HomeDirectory}*" \n\
+                        } \n\
+                    ] \n\
+            } \n\
+        ',
+      });
+    });
 
     
   }
