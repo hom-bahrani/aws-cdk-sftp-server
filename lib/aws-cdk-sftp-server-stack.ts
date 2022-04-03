@@ -10,6 +10,12 @@ import {
   CertificateValidation
 } from 'aws-cdk-lib/aws-certificatemanager';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
+import {
+  Role,
+  PolicyStatement,
+  ServicePrincipal
+} from 'aws-cdk-lib/aws-iam';
+
 
 import { options } from './config';
 
@@ -80,6 +86,22 @@ export class AwsCdkSftpServerStack extends Stack {
           validation: CertificateValidation.fromDns(this.zone),
       });
     }
+
+    const loggingRole = new Role(this, 'loggingRole', {
+      assumedBy: new ServicePrincipal('transfer.amazonaws.com'),
+      description: 'Logging Role for the SFTP Server',
+    });
+
+    loggingRole.addToPrincipalPolicy(new PolicyStatement({
+      sid: 'Logs',
+      actions: [
+        'logs:CreateLogStream',
+        'logs:DescribeLogStreams',
+        'logs:CreateLogGroup',
+        'logs:PutLogEvents',
+      ],
+      resources: ['*'],
+    }));
 
 
 
