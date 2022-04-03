@@ -35,7 +35,8 @@ import {
 } from 'aws-cdk-lib/aws-transfer';
 import {
   Bucket,
-  BlockPublicAccess
+  BlockPublicAccess,
+  EventType
 } from 'aws-cdk-lib/aws-s3';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import {
@@ -45,6 +46,12 @@ import {
 } from 'aws-cdk-lib/aws-lambda';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Provider } from 'aws-cdk-lib/custom-resources';
+import {
+  EmailSubscription,
+  LambdaSubscription
+} from 'aws-cdk-lib/aws-sns-subscriptions';
+import { Topic } from 'aws-cdk-lib/aws-sns';
+import { SnsDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { options } from './config';
 
 export class AwsCdkSftpServerStack extends Stack {
@@ -290,6 +297,37 @@ export class AwsCdkSftpServerStack extends Stack {
         ',
       });
     });
+
+    const notifTopic = new Topic(this, 'notifTopic', { displayName: 'AWS Transfer Notifictions' });
+
+    sftpBucket.addEventNotification(EventType.OBJECT_CREATED_PUT, new SnsDestination(notifTopic));
+    
+    notificationEmails.forEach((email: string) => {
+      notifTopic.addSubscription(new EmailSubscription(email));
+    });
+
+    if (moveToArchive) {
+      const archiveBucket = new Bucket(this, 'archiveBucket', {
+        blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+        removalPolicy: RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
+
+      const archiveFnc = new Function(this, 'archiveFnc', {
+        description: 'Lambda SFTP Archive Function',
+        runtime: Runtime.NODEJS_14_X,
+        handler: 'index.handler',
+        timeout: Duration.seconds(5),
+        code: Code.fromAsset(`lambda/archive`),
+        environment: {
+          ARCHIVE_BUCKET: archiveBucket.bucketName,
+        },
+      });
+      archiveBucket.grantPut(archiveFnc);
+      sftpBucket.grantReadWrite(archiveFnc);
+
+      notifTopic.addSubscription(new LambdaSubscription(archiveFnc));
+    }
 
     
   }
