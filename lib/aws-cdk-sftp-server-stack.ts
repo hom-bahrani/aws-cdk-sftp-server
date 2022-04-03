@@ -9,7 +9,12 @@ import {
   ICertificate,
   CertificateValidation
 } from 'aws-cdk-lib/aws-certificatemanager';
-import { Vpc } from 'aws-cdk-lib/aws-ec2';
+import {
+  Vpc,
+  SecurityGroup,
+  Peer,
+  Port
+} from 'aws-cdk-lib/aws-ec2';
 import {
   Role,
   PolicyStatement,
@@ -102,6 +107,20 @@ export class AwsCdkSftpServerStack extends Stack {
       ],
       resources: ['*'],
     }));
+
+
+    const sg = new SecurityGroup(this, 'sg', {
+      description: 'SFTP Server Sg',
+      vpc,
+      allowAllOutbound: true,
+    });
+
+    if (allowCidrs.length) {
+      allowCidrs.forEach((cidr) => sg.addIngressRule(Peer.ipv4(cidr), Port.tcp(22), 'allow external SFTP access'));
+      sg.addIngressRule(Peer.ipv4(vpcCidrBlock), Port.tcp(22), 'allow internal SFTP access');
+    } else {
+      sg.addIngressRule(Peer.anyIpv4(), Port.tcp(22), 'allow public SFTP access');
+    }
 
 
 
