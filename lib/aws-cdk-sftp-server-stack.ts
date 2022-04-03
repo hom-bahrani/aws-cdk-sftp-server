@@ -1,7 +1,8 @@
 import {
   Stack,
   StackProps,
-  CfnOutput
+  CfnOutput,
+  RemovalPolicy
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { 
@@ -27,6 +28,11 @@ import {
   ServicePrincipal
 } from 'aws-cdk-lib/aws-iam';
 import { CfnServer } from 'aws-cdk-lib/aws-transfer';
+import {
+  Bucket,
+  BlockPublicAccess
+} from 'aws-cdk-lib/aws-s3';
+
 
 
 import { options } from './config';
@@ -138,10 +144,10 @@ export class AwsCdkSftpServerStack extends Stack {
       loggingRole: loggingRole.roleArn,
       protocols: ['SFTP'],
       endpointDetails: {
-          addressAllocationIds,
-          vpcId,
-          subnetIds,
-          securityGroupIds: [sg.securityGroupId],
+        addressAllocationIds,
+        vpcId,
+        subnetIds,
+        securityGroupIds: [sg.securityGroupId],
       },
       certificate: this.certificate?.certificateArn,
     });
@@ -166,6 +172,12 @@ export class AwsCdkSftpServerStack extends Stack {
         value: sftpDomainName,
       });
     }
+
+    const sftpBucket = new Bucket(this, 'sftpBucket', {
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
 
     
   }
