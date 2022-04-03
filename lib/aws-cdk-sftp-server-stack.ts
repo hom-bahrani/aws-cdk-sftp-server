@@ -21,6 +21,7 @@ import {
   PolicyStatement,
   ServicePrincipal
 } from 'aws-cdk-lib/aws-iam';
+import { CfnServer } from 'aws-cdk-lib/aws-transfer';
 
 
 import { options } from './config';
@@ -125,6 +126,20 @@ export class AwsCdkSftpServerStack extends Stack {
 
     const addressAllocationIds = subnetIds.map((sid) => (new CfnEIP(this, `eip${sid}`)).attrAllocationId);
 
+    const server = new CfnServer(this, 'sftpServer', {
+      domain: 'S3',
+      endpointType: 'VPC',
+      identityProviderType: 'SERVICE_MANAGED',
+      loggingRole: loggingRole.roleArn,
+      protocols: ['SFTP'],
+      endpointDetails: {
+          addressAllocationIds,
+          vpcId,
+          subnetIds,
+          securityGroupIds: [sg.securityGroupId],
+      },
+      certificate: this.certificate?.certificateArn,
+    });
 
     
   }
