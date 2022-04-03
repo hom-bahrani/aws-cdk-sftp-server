@@ -2,6 +2,7 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { IHostedZone } from 'aws-cdk-lib/aws-route53';
 import { Certificate, ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { Vpc } from 'aws-cdk-lib/aws-ec2';
 
 import { options } from './config';
 
@@ -41,6 +42,20 @@ export class AwsCdkSftpServerStack extends Stack {
       hostKeySecretArn,
       hostKeyVersion
     } = customHostKey;
+
+    const vpc = (customVpcId) ?
+      Vpc.fromLookup(this, 'vpc', { vpcId: customVpcId })
+        : Vpc.fromLookup(this, 'vpc', { isDefault: true });
+    
+    const { vpcId, vpcCidrBlock } = vpc;
+
+    const subnets = vpc.publicSubnets;
+    
+    if (!subnets.length) {
+      throw new Error('One public subnet is required');
+    }
+    
+    const subnetIds = subnets.map((subnet) => subnet.subnetId);
     
   }
 }
