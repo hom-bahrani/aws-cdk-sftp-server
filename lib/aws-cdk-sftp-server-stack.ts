@@ -2,7 +2,9 @@ import {
   Stack,
   StackProps,
   CfnOutput,
-  RemovalPolicy
+  RemovalPolicy,
+  Duration,
+  CustomResource,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { 
@@ -32,9 +34,14 @@ import {
   Bucket,
   BlockPublicAccess
 } from 'aws-cdk-lib/aws-s3';
-
-
-
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import {
+  Function,
+  Runtime,
+  Code
+} from 'aws-cdk-lib/aws-lambda';
+import { RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { Provider } from 'aws-cdk-lib/custom-resources';
 import { options } from './config';
 
 export class AwsCdkSftpServerStack extends Stack {
@@ -178,6 +185,46 @@ export class AwsCdkSftpServerStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+
+    if (useCustomKey) {
+      if (!hostKeySecretArn) {
+        throw new Error('hostKeySecretArn must be provided when importing a custom host key');
+      }
+
+      const keySecret = Secret.fromSecretCompleteArn(this, 'keySecret', hostKeySecretArn);
+
+      // Lambda function for custom resource. We cannot use the 
+      // CDK AWSCustomResource provider as we need to manipulate
+      // the key from Secrets Manager
+      const hostKeyFnc = new Function(this, 'hostKeyFnc', {
+        description: 'Update SFTP Host Key',
+        runtime: Runtime.NODEJS_14_X,
+        handler: 'index.handler',
+        timeout: Duration.seconds(5),
+        code: Code.fromAsset(`lambda/host-key`),
+        logRetention: RetentionDays.ONE_WEEK,
+      });
+
+      keySecret.grantRead(hostKeyFnc);
+      hostKeyFnc.addToRolePolicy(new PolicyStatement({
+        actions: ['transfer:UpdateServer'],
+        resources: [`arn:aws:transfer:${this.region}:${this.account}:server/${serverId}`],
+      }));
+
+      const hostKeyProvider = new Provider(this, 'hostKeyProvider', {
+        onEventHandler: hostKeyFnc,
+        logRetention: RetentionDays.ONE_WEEK,
+      });
+
+      new CustomResource(this, 'customHostKey', {
+        serviceToken: hostKeyProvider.serviceToken,
+        properties: {
+          serverId,
+          hostKeySecretArn,
+          hostKeyVersion, 
+        },
+      });
+    }
 
     
   }
