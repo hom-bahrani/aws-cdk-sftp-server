@@ -1,4 +1,8 @@
-import { Stack, StackProps } from 'aws-cdk-lib';
+import {
+  Stack,
+  StackProps,
+  CfnOutput
+} from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { 
   IHostedZone,
@@ -139,6 +143,13 @@ export class AwsCdkSftpServerStack extends Stack {
           securityGroupIds: [sg.securityGroupId],
       },
       certificate: this.certificate?.certificateArn,
+    });
+
+    const serverId = server.attrServerId;
+    const domainName = `${serverId}.server.transfer.${this.region}.amazonaws.com`;
+    new CfnOutput(this, 'domainName', {
+      description: 'Server endpoint hostname',
+      value: domainName,
     });
 
     
