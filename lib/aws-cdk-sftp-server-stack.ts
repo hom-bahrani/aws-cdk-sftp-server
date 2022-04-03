@@ -13,7 +13,8 @@ import {
   Vpc,
   SecurityGroup,
   Peer,
-  Port
+  Port,
+  CfnEIP,
 } from 'aws-cdk-lib/aws-ec2';
 import {
   Role,
@@ -122,7 +123,7 @@ export class AwsCdkSftpServerStack extends Stack {
       sg.addIngressRule(Peer.anyIpv4(), Port.tcp(22), 'allow public SFTP access');
     }
 
-
+    const addressAllocationIds = subnetIds.map((sid) => (new CfnEIP(this, `eip${sid}`)).attrAllocationId);
 
 
     
