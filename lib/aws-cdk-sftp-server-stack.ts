@@ -6,7 +6,8 @@ import {
 import { Construct } from 'constructs';
 import { 
   IHostedZone,
-  HostedZone
+  HostedZone,
+  CnameRecord
 } from 'aws-cdk-lib/aws-route53';
 import {
   Certificate,
@@ -151,6 +152,20 @@ export class AwsCdkSftpServerStack extends Stack {
       description: 'Server endpoint hostname',
       value: domainName,
     });
+
+    if (useCustomHostname && this.zone) {
+      const sftpDomainName = `${sftpHostname}.${this.zone.zoneName}`;
+      new CnameRecord(this, 'record', {
+        recordName: sftpDomainName,
+        domainName,
+        zone: this.zone,
+      });
+      
+      new CfnOutput(this, 'customHostname', {
+        description: 'Custom server hostname',
+        value: sftpDomainName,
+      });
+    }
 
     
   }
